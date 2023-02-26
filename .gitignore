@@ -30,3 +30,6 @@
 *.exe
 *.out
 *.app
+lib/AGL
+.cache/clangd/index
+build
