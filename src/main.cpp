@@ -4,37 +4,16 @@
 class Circle : public agl::Drawable
 {
 	private:
+		agl::Circle &shape;
+
+	public:
 		agl::Vec<float, 2> position;
 		agl::Vec<float, 2> velocity;
 		agl::Vec<float, 2> acceleration;
 
 		float radius = 1;
-
-		agl::Circle &shape;
-
-	public:
 		Circle(agl::Circle &shape) : shape(shape)
 		{
-		}
-
-		void setRadius(float radius)
-		{
-			this->radius = radius;
-		}
-
-		void setPosition(agl::Vec<float, 2> position)
-		{
-			this->position = position;
-		}
-
-		void setVelocity(agl::Vec<float, 2> velocity)
-		{
-			this->velocity = velocity;
-		}
-
-		void setAcceleration(agl::Vec<float, 2> acceleration)
-		{
-			this->acceleration = acceleration;
 		}
 
 		void update()
@@ -47,7 +26,6 @@ class Circle : public agl::Drawable
 		{
 			shape.setPosition(position);
 			shape.setSize({radius, radius});
-			shape.setOffset({-radius / 2, -radius / 2});
 
 			window.drawShape(shape);
 		}
@@ -58,7 +36,7 @@ class PhySim : public agl::Drawable
 	private:
 		std::vector<Circle> circle;
 		agl::Circle		   &shape;
-		float gravity;
+		float				gravity;
 
 	public:
 		PhySim(agl::Circle &shape) : shape(shape)
@@ -73,17 +51,36 @@ class PhySim : public agl::Drawable
 		void addCircle(agl::Vec<float, 2> position, agl::Vec<float, 2> velocity, float radius)
 		{
 			circle.emplace_back(Circle(shape));
-			circle[circle.size()-1].setPosition(position);
-			circle[circle.size()-1].setVelocity(velocity);
-			circle[circle.size()-1].setRadius(radius);
+			circle[circle.size() - 1].position = position;
+			circle[circle.size() - 1].velocity = velocity;
+			circle[circle.size() - 1].radius   = radius;
 		}
 
 		void update()
 		{
 			for (Circle &circle : circle)
 			{
-				circle.setAcceleration({0, gravity});
+				circle.acceleration = {0, gravity};
 				circle.update();
+
+				agl::Vec<float, 2> boundryPosition = {500, 500};
+				float			   boundryRadius   = 500;
+
+				agl::Vec<float, 2> offset = circle.position;
+				offset					  = offset - boundryPosition;
+
+				float distance = offset.length();
+
+				float overlap = distance + circle.radius - boundryRadius;
+
+				if (overlap > 0)
+				{
+					agl::Vec<float, 2> pushback = offset.normalized() * overlap;
+
+					circle.position = circle.position - pushback;
+
+					circle.velocity = circle.velocity - pushback;
+				}
 			}
 		}
 
@@ -135,8 +132,13 @@ int main()
 	PhySim phySim(shape);
 	phySim.setGravity(0.1);
 
-	phySim.addCircle({500, 500}, {3, -9}, 10);
-	phySim.addCircle({400, 500}, {3, -3}, 10);
+	phySim.addCircle({500, 500}, {5, -1}, 100);
+
+	agl::Circle boundry(32);
+	boundry.setColor(agl::Color::Blue);
+	boundry.setPosition({500, 500, -1});
+	boundry.setSize({500, 500});
+	boundry.setTexture(&blank);
 
 	while (!event.windowClose())
 	{
@@ -145,6 +147,7 @@ int main()
 		window.clear();
 
 		window.draw(phySim);
+		window.drawShape(boundry);
 
 		window.display();
 
