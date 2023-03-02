@@ -9,16 +9,19 @@ class Circle : public agl::Drawable
 	public:
 		agl::Vec<float, 2> position;
 		agl::Vec<float, 2> velocity;
-		agl::Vec<float, 2> acceleration;
+		agl::Vec<float, 2> force;
+		float			   radius = 1;
+		float			   mass	  = 1;
 
-		float radius = 1;
 		Circle(agl::Circle &shape) : shape(shape)
 		{
 		}
 
 		void update()
 		{
-			velocity = velocity + acceleration;
+			velocity = velocity + (force * (1. / mass));
+			force = {0, 0};
+
 			position = position + velocity;
 		}
 
@@ -48,21 +51,26 @@ class PhySim : public agl::Drawable
 			this->gravity = gravity;
 		}
 
-		void addCircle(agl::Vec<float, 2> position, agl::Vec<float, 2> velocity, float radius)
+		void addCircle(agl::Vec<float, 2> position, float radius, agl::Vec<float, 2> force)
 		{
 			circle.emplace_back(Circle(shape));
 			circle[circle.size() - 1].position = position;
-			circle[circle.size() - 1].velocity = velocity;
 			circle[circle.size() - 1].radius   = radius;
+			circle[circle.size() - 1].force = force;
 		}
 
 		void update()
 		{
+			// update position
 			for (Circle &circle : circle)
 			{
-				circle.acceleration = {0, gravity};
 				circle.update();
+				circle.force += agl::Vec<float, 2>{0, gravity} * circle.mass;
+			}
 
+			// collision detection
+			for (Circle &circle : circle)
+			{
 				agl::Vec<float, 2> boundryPosition = {500, 500};
 				float			   boundryRadius   = 500;
 
@@ -75,11 +83,11 @@ class PhySim : public agl::Drawable
 
 				if (overlap > 0)
 				{
-					agl::Vec<float, 2> pushback = offset.normalized() * overlap;
+					agl::Vec<float, 2> pushback = offset.normalized() * -overlap;
 
-					circle.position = circle.position - pushback;
+					circle.position += pushback;
 
-					circle.velocity = circle.velocity - pushback;
+					circle.force += (pushback * circle.mass);
 				}
 			}
 		}
@@ -130,9 +138,9 @@ int main()
 	shape.setColor(agl::Color::White);
 
 	PhySim phySim(shape);
-	phySim.setGravity(0.1);
+	phySim.setGravity(1);
 
-	phySim.addCircle({500, 500}, {5, -1}, 100);
+	phySim.addCircle({500, 900}, 100, {1000, 0});
 
 	agl::Circle boundry(32);
 	boundry.setColor(agl::Color::Blue);
