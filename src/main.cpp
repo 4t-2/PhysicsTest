@@ -1,4 +1,5 @@
 #include "../lib/AGL/agl.hpp"
+#include <limits>
 #include <vector>
 
 class Circle : public agl::Drawable
@@ -20,7 +21,7 @@ class Circle : public agl::Drawable
 		void update()
 		{
 			velocity = velocity + (force * (1. / mass));
-			force = {0, 0};
+			force	 = {0, 0};
 
 			position = position + velocity;
 		}
@@ -37,7 +38,7 @@ class Circle : public agl::Drawable
 class PhySim : public agl::Drawable
 {
 	private:
-		std::vector<Circle> circle;
+		std::vector<Circle> circleVec;
 		agl::Circle		   &shape;
 		float				gravity;
 
@@ -51,26 +52,65 @@ class PhySim : public agl::Drawable
 			this->gravity = gravity;
 		}
 
-		void addCircle(agl::Vec<float, 2> position, float radius, agl::Vec<float, 2> force)
+		void addCircle(agl::Vec<float, 2> position, float radius, agl::Vec<float, 2> force, float mass)
 		{
-			circle.emplace_back(Circle(shape));
-			circle[circle.size() - 1].position = position;
-			circle[circle.size() - 1].radius   = radius;
-			circle[circle.size() - 1].force = force;
+			circleVec.emplace_back(Circle(shape));
+			circleVec[circleVec.size() - 1].position = position;
+			circleVec[circleVec.size() - 1].radius	 = radius;
+			circleVec[circleVec.size() - 1].force	 = force;
+			circleVec[circleVec.size() - 1].mass	 = mass;
 		}
 
 		void update()
 		{
 			// update position
-			for (Circle &circle : circle)
+			for (Circle &circle : circleVec)
 			{
 				circle.update();
 				circle.force += agl::Vec<float, 2>{0, gravity} * circle.mass;
 			}
 
 			// collision detection
-			for (Circle &circle : circle)
+			for (Circle &circle : circleVec)
 			{
+				for (Circle &otherCircle : circleVec)
+				{
+					if (&otherCircle == &circle)
+					{
+						continue;
+					}
+
+					agl::Vec<float, 2> circleOffset = otherCircle.position - circle.position;
+
+					float circleDistance = circleOffset.length();
+
+					float circleOverlap = (otherCircle.radius + circle.radius) - circleDistance;
+
+					if (circleOverlap > 0)
+					{
+						agl::Vec<float, 2> offsetNormal = circleOffset.normalized();
+						agl::Vec<float, 2> pushback		= offsetNormal * circleOverlap;
+
+						circle.position -= pushback * (otherCircle.mass / (circle.mass + otherCircle.mass));
+						otherCircle.position += pushback * (circle.mass / (circle.mass + otherCircle.mass));
+
+						float actingMass = circle.mass > otherCircle.mass ? otherCircle.mass : circle.mass;
+
+						// agl::Vec<float, 2> velocityDelta = circle.velocity - otherCircle.velocity;
+						//
+						// agl::Vec<float, 2> forceBack =
+						// 	agl::Vec<float, 2>{velocityDelta.x * offsetNormal.x, velocityDelta.y * offsetNormal.y} *
+						// 	actingMass;
+						//
+						// circle.force -= forceBack;
+						// otherCircle.force += forceBack;
+
+						circle.force -= pushback * actingMass;
+						otherCircle.force += pushback * actingMass;
+					}
+				}
+
+				// boundry
 				agl::Vec<float, 2> boundryPosition = {500, 500};
 				float			   boundryRadius   = 500;
 
@@ -83,21 +123,31 @@ class PhySim : public agl::Drawable
 
 				if (overlap > 0)
 				{
-					agl::Vec<float, 2> pushback = offset.normalized() * -overlap;
+					agl::Vec<float, 2> offsetNormal = offset.normalized();
+					agl::Vec<float, 2> pushback		= offsetNormal * overlap;
 
-					circle.position += pushback;
+					circle.position -= pushback;
 
-					circle.force += (pushback * circle.mass);
+					// circle.force -=
+					// 	agl::Vec<float, 2>{circle.velocity.x * offsetNormal.x, circle.velocity.y * offsetNormal.y} *
+					// 	circle.mass;
+
+					circle.force -= pushback * circle.mass;
 				}
 			}
 		}
 
 		void drawFunction(agl::RenderWindow &window) override
 		{
-			for (Circle &circle : circle)
+			for (Circle &circle : circleVec)
 			{
 				window.draw(circle);
 			}
+		}
+
+		std::vector<Circle> &getCircleVec()
+		{
+			return circleVec;
 		}
 };
 
@@ -138,9 +188,10 @@ int main()
 	shape.setColor(agl::Color::White);
 
 	PhySim phySim(shape);
-	phySim.setGravity(1);
+	phySim.setGravity(0.1);
 
-	phySim.addCircle({500, 900}, 100, {1000, 0});
+	phySim.addCircle({100, 500}, 100, {4, 0}, 2);
+	phySim.addCircle({500, 500}, 100, {0, 0}, 1);
 
 	agl::Circle boundry(32);
 	boundry.setColor(agl::Color::Blue);
@@ -160,6 +211,15 @@ int main()
 		window.display();
 
 		phySim.update();
+
+		float force1 = phySim.getCircleVec()[0].velocity.length() * phySim.getCircleVec()[0].mass;
+		// float force2 = phySim.getCircleVec()[1].velocity.length() *
+		// phySim.getCircleVec()[1].mass;
+
+		std::cout << '\n';
+		std::cout << force1 << '\n';
+		// std::cout << force2 << '\n';
+		// std::cout << force1 + force2 << '\n';
 	}
 
 	window.close();
