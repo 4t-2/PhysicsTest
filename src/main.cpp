@@ -35,15 +35,51 @@ class Circle : public agl::Drawable
 		}
 };
 
+class Rectangle : public agl::Drawable
+{
+	private:
+		agl::Rectangle &shape;
+
+	public:
+		agl::Vec<float, 2> position;
+		agl::Vec<float, 2> velocity;
+		agl::Vec<float, 2> force;
+		agl::Vec<float, 2> size;
+		float			   mass;
+
+		Rectangle(agl::Rectangle &shape) : shape(shape)
+		{
+		}
+
+		void update()
+		{
+			velocity = velocity + (force * (1. / mass));
+			force	 = {0, 0};
+
+			position = position + velocity;
+		}
+
+		void drawFunction(agl::RenderWindow &window) override
+		{
+			shape.setPosition(position);
+			shape.setSize(size);
+
+			window.drawShape(shape);
+		}
+};
+
 class PhySim : public agl::Drawable
 {
 	private:
-		std::vector<Circle> circleVec;
-		agl::Circle		   &shape;
-		float				gravity;
+		std::vector<Circle>	   circleVec;
+		std::vector<Rectangle> rectangleVec;
+		agl::Circle			  &circleShape;
+		agl::Rectangle		  &rectangleShape;
+		float				   gravity;
 
 	public:
-		PhySim(agl::Circle &shape) : shape(shape)
+		PhySim(agl::Circle &circleShape, agl::Rectangle &rectangleShape)
+			: circleShape(circleShape), rectangleShape(rectangleShape)
 		{
 		}
 
@@ -54,11 +90,20 @@ class PhySim : public agl::Drawable
 
 		void addCircle(agl::Vec<float, 2> position, float radius, agl::Vec<float, 2> force, float mass)
 		{
-			circleVec.emplace_back(Circle(shape));
+			circleVec.emplace_back(Circle(circleShape));
 			circleVec[circleVec.size() - 1].position = position;
 			circleVec[circleVec.size() - 1].radius	 = radius;
 			circleVec[circleVec.size() - 1].force	 = force;
 			circleVec[circleVec.size() - 1].mass	 = mass;
+		}
+
+		void addRectangle(agl::Vec<float, 2> position, agl::Vec<float, 2> size, agl::Vec<float, 2> force, float mass)
+		{
+			rectangleVec.emplace_back(Rectangle(rectangleShape));
+			rectangleVec[rectangleVec.size() - 1].position = position;
+			rectangleVec[rectangleVec.size() - 1].size	   = size;
+			rectangleVec[rectangleVec.size() - 1].force	   = force;
+			rectangleVec[rectangleVec.size() - 1].mass	   = mass;
 		}
 
 		void update()
@@ -68,6 +113,12 @@ class PhySim : public agl::Drawable
 			{
 				circle.update();
 				circle.force += agl::Vec<float, 2>{0, gravity} * circle.mass;
+			}
+
+			for (Rectangle &rectangle : rectangleVec)
+			{
+				rectangle.update();
+				rectangle.force += agl::Vec<float, 2>{0, gravity} * rectangle.mass;
 			}
 
 			// collision detection
@@ -96,11 +147,10 @@ class PhySim : public agl::Drawable
 
 						float actingMass = circle.mass > otherCircle.mass ? otherCircle.mass : circle.mass;
 
-						// agl::Vec<float, 2> velocityDelta = circle.velocity - otherCircle.velocity;
+						// agl::Vec<float, 2> velocityDelta = circle.velocity -
+						// otherCircle.velocity;
 						//
-						// agl::Vec<float, 2> forceBack =
-						// 	agl::Vec<float, 2>{velocityDelta.x * offsetNormal.x, velocityDelta.y * offsetNormal.y} *
-						// 	actingMass;
+						// agl::Vec<float, 2> forceBack = velocityDelta * actingMass;
 						//
 						// circle.force -= forceBack;
 						// otherCircle.force += forceBack;
@@ -128,11 +178,50 @@ class PhySim : public agl::Drawable
 
 					circle.position -= pushback;
 
-					// circle.force -=
-					// 	agl::Vec<float, 2>{circle.velocity.x * offsetNormal.x, circle.velocity.y * offsetNormal.y} *
-					// 	circle.mass;
-
 					circle.force -= pushback * circle.mass;
+
+					// circle.force -= pushback * circle.mass;
+				}
+			}
+
+			for (Rectangle &rectangle : rectangleVec)
+			{
+				for (Rectangle &otherRectangle : rectangleVec)
+				{
+					if (&rectangle == &otherRectangle)
+					{
+						continue;
+					}
+
+					bool collide = false;
+					collide		 = collide || (otherRectangle.position.x) >= (rectangle.position.x) &&
+											 (otherRectangle.position.y) >= (rectangle.position.y) &&
+											 (otherRectangle.position.x) <= (rectangle.position.x + rectangle.size.x) &&
+											 (otherRectangle.position.y) <= (rectangle.position.y + rectangle.size.y);
+
+					collide =
+						collide || (otherRectangle.position.x + otherRectangle.size.x) >= (rectangle.position.x) &&
+									   (otherRectangle.position.y + otherRectangle.size.y) >= (rectangle.position.y) &&
+									   (otherRectangle.position.x + otherRectangle.size.x) <=
+										   (rectangle.position.x + rectangle.size.x) &&
+									   (otherRectangle.position.y + otherRectangle.size.y) <=
+										   (rectangle.position.y + rectangle.size.y);
+
+					collide =
+						collide || (otherRectangle.position.x) >= (rectangle.position.x) &&
+									   (otherRectangle.position.y + otherRectangle.size.y) >= (rectangle.position.y) &&
+									   (otherRectangle.position.x) <= (rectangle.position.x + rectangle.size.x) &&
+									   (otherRectangle.position.y + otherRectangle.size.y) <=
+										   (rectangle.position.y + rectangle.size.y);
+
+					collide =
+						collide || (otherRectangle.position.x) >= (rectangle.position.x) &&
+									   (otherRectangle.position.y + otherRectangle.size.y) >= (rectangle.position.y) &&
+									   (otherRectangle.position.x) <= (rectangle.position.x + rectangle.size.x) &&
+									   (otherRectangle.position.y + otherRectangle.size.y) <=
+										   (rectangle.position.y + rectangle.size.y);
+
+					std::cout << collide << std::endl;
 				}
 			}
 		}
@@ -142,6 +231,10 @@ class PhySim : public agl::Drawable
 			for (Circle &circle : circleVec)
 			{
 				window.draw(circle);
+			}
+			for (Rectangle &rectangle : rectangleVec)
+			{
+				window.draw(rectangle);
 			}
 		}
 
@@ -187,11 +280,15 @@ int main()
 	shape.setTexture(&blank);
 	shape.setColor(agl::Color::White);
 
-	PhySim phySim(shape);
-	phySim.setGravity(0.1);
+	agl::Rectangle recshape;
+	recshape.setTexture(&blank);
+	recshape.setColor(agl::Color::White);
 
-	phySim.addCircle({100, 500}, 100, {4, 0}, 2);
-	phySim.addCircle({500, 500}, 100, {0, 0}, 1);
+	PhySim phySim(shape, recshape);
+	phySim.setGravity(0);
+
+	phySim.addRectangle({500, 500}, {100, 100}, {1, 0}, 1);
+	phySim.addRectangle({800, 510}, {100, 100}, {0, 0}, 1);
 
 	agl::Circle boundry(32);
 	boundry.setColor(agl::Color::Blue);
@@ -211,15 +308,6 @@ int main()
 		window.display();
 
 		phySim.update();
-
-		float force1 = phySim.getCircleVec()[0].velocity.length() * phySim.getCircleVec()[0].mass;
-		// float force2 = phySim.getCircleVec()[1].velocity.length() *
-		// phySim.getCircleVec()[1].mass;
-
-		std::cout << '\n';
-		std::cout << force1 << '\n';
-		// std::cout << force2 << '\n';
-		// std::cout << force1 + force2 << '\n';
 	}
 
 	window.close();
